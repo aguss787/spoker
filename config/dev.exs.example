@@ -1,0 +1,5 @@
+import Config
+
+config :spoker,
+  sso_base_url: "https://sso.agus.dev",
+  sso_client_secret: ""
