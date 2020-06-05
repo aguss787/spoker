@@ -8,6 +8,8 @@ defmodule Spoker.SocketHandler do
   @clear_vote_type "clear_vote"
   @kick_type "kick"
   @error_type "error"
+  @set_config_type "set_config"
+  @config_type "config"
 
   defmodule State do
     defstruct room_id: "", room: nil, user: nil, ok: true
@@ -34,6 +36,7 @@ defmodule Spoker.SocketHandler do
       @update_meta_type -> update_meta(data, state)
       @clear_vote_type -> clear_vote(data, state)
       @kick_type -> kick(data, state)
+      @set_config_type -> set_config(data, state)
     end
     |> Result.map_err(
          fn {reason, state} ->
@@ -50,6 +53,11 @@ defmodule Spoker.SocketHandler do
 
   defp clear_vote(_data, state) do
     Spoker.Room.clear_vote(state.room, state.user)
+    |> Result.map_raw(fn _ -> state end)
+  end
+
+  defp set_config(data, state) do
+    Spoker.Room.set_config(state.room, state.user, data)
     |> Result.map_raw(fn _ -> state end)
   end
 
@@ -70,7 +78,6 @@ defmodule Spoker.SocketHandler do
         end
       end
     )
-
   end
 
   defp exchange_token(flag, token) do
@@ -153,6 +160,10 @@ defmodule Spoker.SocketHandler do
 
   def websocket_info({:meta, meta}, state) do
     {:reply, {:text, Jason.encode!(%{type: @meta_type, data: meta})}, state}
+  end
+
+  def websocket_info({:config, config}, state) do
+    {:reply, {:text, Jason.encode!(%{type: @config_type, data: config})}, state}
   end
 
   def websocket_info({:vote, votes, observers, participants}, state) do

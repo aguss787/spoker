@@ -2,6 +2,7 @@ defmodule Spoker.Room do
   use GenServer, restart: :temporary
 
   defmodule Config do
+    @derive Jason.Encoder
     defstruct freeze_after_vote: true
   end
 
@@ -45,6 +46,11 @@ defmodule Spoker.Room do
     |> Result.to_result()
   end
 
+  def set_config(room, _user, config_map) do
+    GenServer.call(room, {:set_config, config_map})
+    |> Result.to_result()
+  end
+
   def clear_vote(room, _user) do
     GenServer.call(room, {:clear_vote})
     |> Result.to_result()
@@ -82,6 +88,7 @@ defmodule Spoker.Room do
 
       send_votes_to_all(state)
       send_meta(state, from)
+      send_config(state, from)
 
       {
         :reply,
@@ -153,6 +160,25 @@ defmodule Spoker.Room do
     {:reply, :ok, state}
   end
 
+  defp handle_call_int({:set_config, configMap}, _from, state) do
+    config = Map.keys(state.config)
+    |> Enum.filter(fn key -> key != :__struct__ end)
+    |> Enum.reduce(state.config, fn key, acc ->
+      key_string = Atom.to_string(key)
+      if Map.has_key?(configMap, key_string) do
+        Map.put(acc, key, Map.fetch!(configMap, key_string))
+      else
+        acc
+      end
+    end)
+
+    state = %{state | config: config}
+
+    send_config_to_all(state)
+
+    {:reply, :ok, state}
+  end
+
   defp send_meta_to_all_except_sender(state, sender) do
     send_to_all_except_sender(
       state,
@@ -163,6 +189,14 @@ defmodule Spoker.Room do
 
   defp send_meta(state, pid) do
     Process.send(pid, {:meta, %{title: state.title, description: state.description}}, [])
+  end
+
+  defp send_config_to_all(state) do
+    send_to_all(state, fn pid -> send_config(state, pid) end)
+  end
+
+  defp send_config(state, pid) do
+    Process.send(pid, {:config, state.config}, [])
   end
 
   defp send_votes_to_all(state) do
