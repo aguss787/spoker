@@ -1,8 +1,12 @@
 defmodule Spoker.Room do
   use GenServer, restart: :temporary
 
+  defmodule Config do
+    defstruct freeze_after_vote: true
+  end
+
   defmodule State do
-    defstruct id: "", title: "T000", description: "", users: %{}, votes: %{}, last_clean_up: nil
+    defstruct id: "", title: "T000", description: "", users: %{}, votes: %{}, last_clean_up: nil, config: %Config{}
   end
 
   defmodule User do
@@ -129,12 +133,16 @@ defmodule Spoker.Room do
   end
 
   defp handle_call_int({:vote, user, value}, _from, state) do
-    votes = Map.put(state.votes, user, value)
-    state = %{state | votes: votes}
+    if !state.config.freeze_after_vote || !done_voting?(state) do
+      votes = Map.put(state.votes, user, value)
+      state = %{state | votes: votes}
 
-    send_votes_to_all(state)
+      send_votes_to_all(state)
 
-    {:reply, :ok, state}
+      {:reply, :ok, state}
+    else
+      {:reply, :ok, state}
+    end
   end
 
   defp handle_call_int({:clear_vote}, _from, state) do
@@ -158,11 +166,7 @@ defmodule Spoker.Room do
   end
 
   defp send_votes_to_all(state) do
-    is_done = Map.keys(state.users)
-              |> Enum.filter(fn user -> Map.fetch!(state.users, user).role == :participant end)
-              |> Enum.all?(fn user -> Map.has_key?(state.votes, user) end)
-
-    votes = if is_done do
+    votes = if done_voting?(state) do
       state.votes
     else
       Map.keys(state.votes)
@@ -194,6 +198,12 @@ defmodule Spoker.Room do
   @impl true
   def handle_info(:timeout, state) do
     {:stop, :normal, state}
+  end
+
+  defp done_voting?(state) do
+    Map.keys(state.users)
+    |> Enum.filter(fn user -> Map.fetch!(state.users, user).role == :participant end)
+    |> Enum.all?(fn user -> Map.has_key?(state.votes, user) end)
   end
 
   ## clean up unwanted entry
