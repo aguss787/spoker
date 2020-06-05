@@ -175,7 +175,20 @@ defmodule Spoker.Room do
     participants = Map.keys(state.users)
                    |> Enum.filter(fn user -> Map.fetch!(state.users, user).role == :participant end)
 
-    send_to_all(state, fn pid -> Process.send(pid, {:vote, votes, observers, participants}, []) end)
+    votes = Map.keys(state.users)
+            |> Enum.map(
+                 fn user ->
+                   pid = Map.fetch!(state.users, user).pid
+                   if Map.fetch!(state.users, user).role == :participant && Map.has_key?(state.votes, user) do
+                     {pid, Map.put(votes, user, Map.fetch!(state.votes, user))}
+                   else
+                     {pid, votes}
+                   end
+                 end
+               )
+            |> Enum.reduce(%{}, fn {user, votes}, acc -> Map.put(acc, user, votes) end)
+
+    send_to_all(state, fn pid -> Process.send(pid, {:vote, Map.fetch!(votes, pid), observers, participants}, []) end)
   end
 
   @impl true
