@@ -162,15 +162,18 @@ defmodule Spoker.Room do
 
   defp handle_call_int({:set_config, configMap}, _from, state) do
     config = Map.keys(state.config)
-    |> Enum.filter(fn key -> key != :__struct__ end)
-    |> Enum.reduce(state.config, fn key, acc ->
-      key_string = Atom.to_string(key)
-      if Map.has_key?(configMap, key_string) do
-        Map.put(acc, key, Map.fetch!(configMap, key_string))
-      else
-        acc
-      end
-    end)
+             |> Enum.filter(fn key -> key != :__struct__ end)
+             |> Enum.reduce(
+                  state.config,
+                  fn key, acc ->
+                    key_string = Atom.to_string(key)
+                    if Map.has_key?(configMap, key_string) do
+                      Map.put(acc, key, Map.fetch!(configMap, key_string))
+                    else
+                      acc
+                    end
+                  end
+                )
 
     state = %{state | config: config}
 
@@ -226,7 +229,14 @@ defmodule Spoker.Room do
                )
             |> Enum.reduce(%{}, fn {user, votes}, acc -> Map.put(acc, user, votes) end)
 
-    send_to_all(state, fn pid -> Process.send(pid, {:vote, Map.fetch!(votes, pid), observers, participants}, []) end)
+    send_to_all(
+      state,
+      fn pid ->
+        if Map.has_key?(votes, pid) do
+          Process.send(pid, {:vote, Map.fetch!(votes, pid), observers, participants}, [])
+        end
+      end
+    )
   end
 
   @impl true
